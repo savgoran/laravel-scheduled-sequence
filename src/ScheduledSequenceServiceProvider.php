@@ -38,7 +38,7 @@ class ScheduledSequenceServiceProvider extends ServiceProvider
             [__DIR__.'/../config/scheduled-sequence.php' => config_path('scheduled-sequence.php')],
             'scheduled-sequence-config',
         );
-        $this->publishesMigrations(
+        $this->publishes(
             [__DIR__.'/../database/migrations' => database_path('migrations')],
             'scheduled-sequence-migrations',
         );
