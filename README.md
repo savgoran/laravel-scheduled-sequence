@@ -2,174 +2,233 @@
 
 > **Experimental reference implementation**
 >
-> Persistent, state-aware scheduling sequences with irregular timing for Laravel applications.
+> The public API may change while the scheduling and failure semantics are refined.
 
-This package explores a first-class abstraction for **persistent irregular schedules whose timing belongs to an individual application entity**, rather than to the application's global schedule or to delayed jobs stored in a queue.
+Database-backed, model-aware scheduled sequences for Laravel 10–13 and PHP 8.1 or newer.
 
-It is the reference implementation for [Laravel Framework Discussion #61689](https://github.com/laravel/framework/discussions/61689).
+A sequence stores authoritative scheduling state outside the queue. Every due position becomes a durable occurrence with a stable identity before Laravel Queue executes it.
 
-## Why
+This package is the reference implementation for
+[Laravel Framework Discussion #61689](https://github.com/laravel/framework/discussions/61689).
 
-Laravel already has excellent primitives for:
+## Install
 
-- application-level recurring schedules via the Scheduler;
-- deferred execution via queues and delayed jobs.
+The package is not yet published on Packagist. Install the experimental branch
+directly from GitHub:
 
-What is missing is an explicit representation of long-lived scheduling state such as:
-
-```text
-now
-+1 day at 10:00
-+2 days at 10:00
-+4 days at 10:00
-+7 days at 10:00
-+10 days at 10:00
-+15 days at 10:00
-+20 days at 10:00
-then every 5 days
+```json
+{
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/savgoran/laravel-scheduled-sequence"
+        }
+    ],
+    "require": {
+        "aisoft/laravel-scheduled-sequence": "dev-main"
+    }
+}
 ```
 
-Each entity may start independently, and the sequence may stop when current application state changes.
+Then publish and run the package migrations:
 
-## Core idea
-
-```text
-Application entity
-        │
-        ▼
-     start_at
-        │
-        ▼
- irregular offsets
-        │
-        ▼
-      next_at
-        │
-        ▼
- shouldContinue()
-      /      \
-    yes       no
-     │         │
- handle()    cancel
-     │
-     ▼
- next occurrence
+```bash
+php artisan vendor:publish --tag=scheduled-sequence-config
+php artisan vendor:publish --tag=scheduled-sequence-migrations
+php artisan migrate
 ```
 
-The important distinction is not only *how work is executed later*, but **where the authoritative scheduling state lives**.
+Package discovery registers the provider and commands. Publishing configuration is optional. Publishing and running the migrations is required.
 
-## Example API
+For local path development:
 
-> The API below is illustrative and may change.
+```json
+{
+    "repositories": [{"type": "path", "url": "../package"}],
+    "require": {"aisoft/laravel-scheduled-sequence": "@dev"}
+}
+```
+
+## Create a sequence
+
+```bash
+php artisan make:scheduled-sequence AccountLeftUnpaidSequence
+```
 
 ```php
+<?php
+
+namespace App\ScheduledSequence;
+
+use AiSoft\ScheduledSequence\Occurrence;
+use AiSoft\ScheduledSequence\ScheduledSequence;
+use App\Jobs\SendAccountReminder;
+
 final class AccountLeftUnpaidSequence extends ScheduledSequence
 {
     protected array $offsets = [
         'now',
         '1 day 10am',
-        '2 days 10am',
-        '4 days 10am',
+        '3 days 10am',
         '7 days 10am',
-        '10 days 10am',
-        '15 days 10am',
-        '20 days 10am',
     ];
 
     protected ?string $repeatEvery = '5 days';
 
-    protected function shouldContinue(): bool
+    protected function shouldContinue(Occurrence $occurrence): bool
     {
-        return $this->model->isUnpaid();
+        return $occurrence->sequence->sequenceable?->isUnpaid() === true;
     }
 
     protected function handle(Occurrence $occurrence): void
     {
-        // Perform or dispatch work for this occurrence.
+        SendAccountReminder::dispatch(
+            accountId: $occurrence->sequence->sequenceable_id,
+            occurrenceKey: $occurrence->key,
+        );
     }
 }
 ```
 
-Start it for an entity:
+Start or restart it for a model:
 
 ```php
-AccountLeftUnpaidSequence::start($account);
+AccountLeftUnpaidSequence::start($account, $account->user_id);
 ```
 
-## Relationship to Laravel Scheduler and queues
+Restarting the same handler/model pair increments `definition_version`. Queued occurrences from the older definition become stale and do not execute.
 
-| Mechanism | Responsibility |
-| --- | --- |
-| Laravel Scheduler | Determines when the application checks for due work |
-| Queue / delayed jobs | Executes or defers an individual unit of work |
-| Scheduled Sequence | Owns persistent, entity-specific temporal state between occurrences |
+Offsets use formats accepted by PHP `DateTime::modify`, must be unique after normalization, and must move forward in their declared order.
 
-A sequence runner may itself be scheduled normally:
+## Execution contract
 
-```php
-Schedule::command('scheduled-sequence:run')
-    ->everyMinute()
-    ->withoutOverlapping();
+Scheduled Sequence owns **when work becomes due and when it is durably handed off**. Laravel Queue owns execution attempts and retry timing after handoff.
+
+The runner:
+
+1. locks a due sequence row in a database transaction;
+2. creates a uniquely identified occurrence;
+3. advances the sequence in the same transaction;
+4. publishes the pending occurrence to Laravel Queue;
+5. recovers pending or abandoned work on later runs.
+
+Occurrence identity is stable across retries:
+
+```text
+(sequence_id, definition_version, occurrence_number)
 ```
 
-A sequence occurrence may dispatch normal queued work:
+`$occurrence->key` is an opaque idempotency key suitable for passing to application jobs and external integrations.
+
+Before `handle` runs, the package reloads the sequence, validates its definition version and cancellation status, and calls `shouldContinue`. A cancelled, restarted, or rejected occurrence is skipped.
+
+Exactly-once external effects are not promised. Use the occurrence key with integrations that support idempotency.
+
+## Runner registration
+
+The provider registers this command with Laravel Scheduler every minute by default:
+
+```bash
+php artisan scheduled-sequence:run
+```
+
+The server still needs Laravel's normal scheduler trigger:
+
+```cron
+* * * * * cd /path-to-project && php artisan schedule:run >> /dev/null 2>&1
+```
+
+Set `register_scheduler` to `false` in the published configuration when the application wants to register the command itself.
+
+Run queue workers for the configured queue connection. With the `sync` queue connection, occurrences execute inside the runner process and Laravel does not provide asynchronous retry attempts.
+
+## Catch-up and recurrence
+
+The default catch-up policy is `coalesce_latest`: when several positions became due during downtime, one occurrence is created for the latest due position.
+
+Per sequence, choose:
 
 ```php
-protected function handle(Occurrence $occurrence): void
+use AiSoft\ScheduledSequence\Enums\CatchUpPolicy;
+
+protected ?string $catchUpPolicy = CatchUpPolicy::COALESCE_LATEST;
+// CatchUpPolicy::REPLAY_ALL
+// CatchUpPolicy::SKIP
+```
+
+`REPLAY_ALL` is bounded by `replay_limit`. Recurrence remains anchored to intended scheduled time rather than worker completion time.
+
+Repeat after the finite prefix:
+
+```php
+protected ?string $repeatEvery = '5 days';
+```
+
+Repeat the complete offset sequence:
+
+```php
+protected bool $repeatSequence = true;
+```
+
+## Guard application jobs
+
+When `handle` dispatches another job that may wait independently, pass the occurrence key and validate it immediately before its side effect:
+
+```php
+use AiSoft\ScheduledSequence\Services\OccurrenceGuard;
+
+public function handle(OccurrenceGuard $guard): void
 {
-    SendAccountReminder::dispatch($this->model);
+    if (! $guard->allows($this->occurrenceKey)) {
+        return;
+    }
+
+    // Perform the external side effect with the same idempotency key.
 }
 ```
 
-## Design status
+## Memory and retention
 
-The package is intentionally experimental. The public contract is still being refined, especially around:
+Store small application-owned markers in the sequence record:
 
-- occurrence identity and definition versioning;
-- dispatch timing vs. action-completion semantics;
-- duplicate claims by multiple runners;
-- stale queued work after cancellation or rescheduling;
-- durable handoff between database state and external queues;
-- downtime and missed-occurrence policies;
-- retries, backoff and idempotency boundaries.
-
-See [docs/RFC.md](docs/RFC.md) for the full design document.
-
-## Non-goals
-
-Scheduled Sequences are not intended to:
-
-- replace Laravel's Scheduler;
-- replace queues, chains, or batches;
-- become a general workflow/BPM engine;
-- model arbitrary branching graphs;
-- guarantee exactly-once external side effects;
-- store every future occurrence in advance.
-
-The topology stays linear:
-
-```text
-A → B → C → D → D → D ...
+```php
+$record = $sequence->getSequenceRecord();
+$record->remember('notices.initial.sent_at', now()->toIso8601String());
+$record->recall('notices.initial.sent_at');
 ```
 
-## Current target
+Keep terminal state permanently when it is part of the business audit trail:
 
-The reference package is intended to support Laravel 10–13 while the API evolves.
+```php
+protected bool $rememberPermanently = true;
+```
 
-## Installation
+Non-permanent terminal sequences are retained temporarily so queued jobs can validate their version and status, then pruned after `terminal_retention_seconds`. Failed occurrences block automatic pruning for diagnosis.
 
-The package is **not yet published on Packagist**.
+## Documentation
 
-For now, this repository should be treated as a reference implementation and design workspace.
+- [Usage manual](MANUAL.md)
+- [Technical RFC](docs/RFC.md)
+- [Implementation plan and acceptance scenarios](docs/IMPLEMENTATION_PLAN.md)
+- [Upgrade guide](UPGRADE.md)
 
-## Contributing
+## Versioning
 
-Design feedback is welcome, especially on the contracts documented in the RFC and the open reliability issues.
+This package follows Semantic Versioning. Until `1.0.0`, the public API is
+unstable and may change between minor releases. Laravel compatibility is
+declared independently through Composer constraints.
 
-Please also see the upstream Laravel discussion:
+## Test
 
-- https://github.com/laravel/framework/discussions/61689
+```bash
+composer install
+composer check
+```
+
+`composer check` validates the optimized PSR-4 autoloader, checks formatting with
+the PSR-12 preset (the current replacement for PSR-2), and runs PHPUnit.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+Laravel Scheduled Sequence is open-source software licensed under the
+[MIT license](LICENSE).

@@ -1,0 +1,57 @@
+<?php
+
+namespace {{ namespace }};
+
+use AiSoft\ScheduledSequence\Occurrence;
+use AiSoft\ScheduledSequence\ScheduledSequence;
+
+/**
+ * Define the scheduled actions for this model-specific sequence.
+ */
+class {{ class }} extends ScheduledSequence
+{
+    /** Retain completed sequence state as a permanent audit record. */
+    protected bool $rememberPermanently = false;
+
+    /** @var list<string> Relative offsets accepted by DateTime::modify(). */
+    protected array $offsets = [
+        '1 day 10am',
+        '3 days 10am',
+    ];
+
+    /**
+     * Determine whether current business state still permits this occurrence.
+     */
+    protected function shouldContinue(Occurrence $occurrence): bool
+    {
+        return true;
+    }
+
+    /**
+     * Handle one due occurrence.
+     */
+    protected function handle(Occurrence $occurrence): void
+    {
+        match ($occurrence->offset) {
+            '1day10am' => $this->onFirstReminder($occurrence),
+            '3days10am' => $this->onFinalReminder($occurrence),
+            default => null,
+        };
+    }
+
+    /**
+     * Handle the first reminder occurrence.
+     */
+    private function onFirstReminder(Occurrence $occurrence): void
+    {
+        // Pass $occurrence->key to queued work as its stable idempotency key.
+    }
+
+    /**
+     * Handle the final reminder occurrence.
+     */
+    private function onFinalReminder(Occurrence $occurrence): void
+    {
+        // Dispatch the final notification or job.
+    }
+}
