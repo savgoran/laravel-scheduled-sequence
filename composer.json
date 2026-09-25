@@ -1,0 +1,43 @@
+{
+    "name": "aisoft/laravel-scheduled-sequence",
+    "description": "Persistent, state-aware scheduling sequences with irregular timing for Laravel applications.",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Goran Savkic"
+        }
+    ],
+    "require": {
+        "php": "^8.1",
+        "illuminate/console": "^10.0|^11.0|^12.0|^13.0",
+        "illuminate/database": "^10.0|^11.0|^12.0|^13.0",
+        "illuminate/support": "^10.0|^11.0|^12.0|^13.0"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^8.0|^9.0|^10.0|^11.0",
+        "phpunit/phpunit": "^10.5|^11.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "AiSoft\\ScheduledSequence\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "AiSoft\\ScheduledSequence\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "AiSoft\\ScheduledSequence\\ScheduledSequenceServiceProvider"
+            ]
+        }
+    },
+    "scripts": {
+        "test": "phpunit"
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
