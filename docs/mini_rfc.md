@@ -124,6 +124,8 @@ Laravel Queue
 
 If publication is interrupted, the pending occurrence remains recoverable. Duplicate publication is safe because only one job can atomically claim an occurrence.
 
+The reliability contract distinguishes both crash cut points: termination before queue acceptance and termination after queue acceptance but before the publisher records success. Recovery must make eventual progress in both cases and reuse the same occurrence identity.
+
 The ledger stores due occurrences, not every future occurrence.
 
 ## Persistence
@@ -162,6 +164,8 @@ Due work is claimed with a database row lock and a unique occurrence constraint.
 Laravel Queue retries a failed occurrence using the same identity. Abandoned running claims return to pending after a timeout.
 
 Exactly-once external side effects remain a non-goal. Destinations should use the occurrence key for idempotency where supported.
+
+An idempotent downstream test double verifies that repeated delivery receives the same key and applies one logical effect. This validates key propagation without claiming atomicity between the package database and an external service.
 
 ## Relationship to existing Laravel features
 

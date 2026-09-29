@@ -1,0 +1,56 @@
+name: reliability
+
+on: [push, pull_request]
+
+jobs:
+  database-process-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        database: [mysql, pgsql]
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: scheduled_sequence
+          MYSQL_ROOT_PASSWORD: password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: scheduled_sequence
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d scheduled_sequence"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      RUN_RELIABILITY_TESTS: '1'
+      RELIABILITY_DB_CONNECTION: ${{ matrix.database }}
+      RELIABILITY_DB_HOST: 127.0.0.1
+      RELIABILITY_DB_DATABASE: scheduled_sequence
+      RELIABILITY_DB_PASSWORD: password
+    steps:
+      - uses: actions/checkout@v5
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql, pdo_pgsql
+          coverage: none
+      - run: composer require --dev --no-update "laravel/framework:^12.0" "orchestra/testbench:^10.0"
+      - run: composer install --prefer-dist --no-interaction
+      - name: Run real-process reliability tests
+        run: composer test:reliability
+        env:
+          RELIABILITY_DB_PORT: ${{ matrix.database == 'pgsql' && '5432' || '3306' }}
+          RELIABILITY_DB_USERNAME: ${{ matrix.database == 'pgsql' && 'postgres' || 'root' }}

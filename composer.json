@@ -45,6 +45,7 @@
         "check-autoload": "composer dump-autoload --optimize --strict-psr",
         "lint": "pint --test",
         "test": "phpunit",
+        "test:reliability": "phpunit --testsuite Reliability",
         "check": [
             "@check-autoload",
             "@lint",

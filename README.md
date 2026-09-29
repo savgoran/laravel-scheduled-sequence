@@ -122,7 +122,31 @@ Occurrence identity is stable across retries:
 
 Before `handle` runs, the package reloads the sequence, validates its definition version and cancellation status, and calls `shouldContinue`. A cancelled, restarted, or rejected occurrence is skipped.
 
+If the sequenceable model has been deleted, the occurrence becomes stale and the sequence is cancelled instead of invoking application handling.
+
 Exactly-once external effects are not promised. Use the occurrence key with integrations that support idempotency.
+
+The recoverable publication contract covers both sides of the queue boundary:
+
+- if the process stops after committing the occurrence but before queue acceptance, a later publisher sends that pending occurrence;
+- if the queue accepts the message but the publisher stops before recording `published`, recovery may send the same occurrence again.
+
+Every delivery uses the same occurrence identity. Accepted occurrences must eventually make progress, while duplicate delivery must not create duplicate effects inside the package-controlled execution boundary. External systems still require their own idempotency support.
+
+## Reliability tests
+
+The regular package suite uses SQLite and covers the Laravel 10–13 compatibility matrix. A separate real-process suite uses database queues and deterministic barriers against MySQL and PostgreSQL:
+
+```bash
+RUN_RELIABILITY_TESTS=1 \
+RELIABILITY_DB_CONNECTION=mysql \
+RELIABILITY_DB_DATABASE=scheduled_sequence \
+RELIABILITY_DB_USERNAME=root \
+RELIABILITY_DB_PASSWORD=password \
+composer test:reliability
+```
+
+Set `RELIABILITY_DB_HOST` and `RELIABILITY_DB_PORT` when the database does not use the defaults. GitHub Actions runs this suite for both supported production database engines.
 
 ## Runner registration
 
@@ -158,6 +182,8 @@ protected ?string $catchUpPolicy = CatchUpPolicy::COALESCE_LATEST;
 
 `REPLAY_ALL` is bounded by `replay_limit`. Recurrence remains anchored to intended scheduled time rather than worker completion time.
 
+Daily local-clock recurrence is tested across forward and backward daylight-saving transitions. The package timezone defaults to the Laravel application timezone; keep them aligned when offsets represent local wall-clock time.
+
 Repeat after the finite prefix:
 
 ```php
@@ -186,6 +212,8 @@ public function handle(OccurrenceGuard $guard): void
     // Perform the external side effect with the same idempotency key.
 }
 ```
+
+The package reliability suite also verifies that retries and independently queued application work receive the same occurrence key. The receiving integration must use that key when applying an idempotent external effect.
 
 ## Memory and retention
 

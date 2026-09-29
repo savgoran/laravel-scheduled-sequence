@@ -210,6 +210,15 @@ If it stops after publication but before marking `published`, the occurrence may
 
 Publisher updates use compare-and-set conditions so a fast worker cannot finish and then be regressed to `published`.
 
+These are separate fault boundaries and both require eventual progress:
+
+1. **Committed before queue acceptance.** The durable pending occurrence remains discoverable and is eventually published with its original identity.
+2. **Queue accepted before local acknowledgement.** Recovery may publish a duplicate because local state cannot prove that the first publication succeeded. Every delivery carries the same identity, and duplicate jobs cannot both claim the occurrence.
+
+An `at most once` assertion is insufficient because zero executions also satisfy it. The contract is:
+
+> Every accepted occurrence eventually makes progress, while duplicate delivery of the same occurrence identity must not produce duplicate effects within the boundary controlled by the package.
+
 ## Stale work
 
 Immediately before application handling, the worker reloads the sequence and verifies:
@@ -240,6 +249,8 @@ Every retry claims the same occurrence ID and retains the same key.
 The sequence has already advanced after durable local handoff. A failed occurrence therefore does not silently move scheduling state backward. Failed occurrences remain queryable and prevent automatic sequence pruning.
 
 The package does not infer that a successful PHP return means an external system performed exactly one side effect. External integrations should use occurrence keys as idempotency keys where available.
+
+If a worker stops after an external system accepts a request but before local success is recorded, recovery may invoke application handling again. The package propagates the same key on every attempt; the destination or an application-owned idempotency store must deduplicate the logical effect.
 
 ## Abandoned claims
 
@@ -317,22 +328,28 @@ Published original migrations are not modified. Reliability state and occurrence
 
 The reference tests cover:
 
-1. repeated runner discovery creates one occurrence;
-2. pending work survives until a publisher runs;
-3. duplicate jobs execute application handling once;
-4. fast synchronous execution is not regressed by publisher status updates;
-5. restart/version change makes old occurrences stale;
-6. explicit cancellation makes queued work stale;
-7. retries keep one occurrence identity;
-8. abandoned running claims are recovered;
-9. final occurrences execute after scheduling status becomes completed;
-10. coalesce, replay, skip, recurrence, and time anchoring;
-11. permanent memory and delayed terminal cleanup;
-12. automatic Laravel Scheduler registration.
+1. two independent processes are released through a barrier to race on one due sequence;
+2. a committed occurrence survives termination before publication and eventually succeeds;
+3. termination after durable queue acceptance permits duplicate publication with one stable identity and one controlled effect;
+4. a worker terminated after an idempotent downstream effect reuses the same key and eventually succeeds;
+5. duplicate jobs execute application handling once;
+6. fast synchronous execution is not regressed by publisher status updates;
+7. restart/version change makes old occurrences stale;
+8. explicit cancellation makes queued work stale;
+9. retries keep one occurrence identity;
+10. abandoned running claims are recovered;
+11. missing sequenceable models cancel the sequence and stale current work;
+12. final occurrences execute after scheduling status becomes completed;
+13. coalesce, replay, skip, recurrence, and time anchoring;
+14. daily recurrence preserves local time across forward and backward DST transitions;
+15. occurrence keys are propagated to independently queued application work;
+16. permanent memory, delayed cleanup, and automatic Scheduler registration.
+
+The real-process scenarios run against MySQL and PostgreSQL in CI. They use a barrier immediately before competing claims so the race is reproducible rather than dependent on process startup timing.
 
 ## Remaining limits
 
-- Database row locking behavior depends on the selected database engine.
+- MySQL and PostgreSQL locking behavior is covered; other database engines have not received the same process-level validation.
 - External side effects remain at-least-once unless the destination supports idempotency.
 - A process may be terminated during an external side effect before local success is recorded.
 - Handler definitions are PHP code; changing offsets does not automatically migrate active definitions until they are restarted.

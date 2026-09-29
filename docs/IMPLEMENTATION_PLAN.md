@@ -257,21 +257,23 @@ Automatic once-per-minute Laravel scheduler registration can be implemented afte
 
 ## Required acceptance tests
 
-The implementation is not complete until these scenarios pass:
+The reliability implementation is complete when these scenarios pass:
 
-1. **Competing runners:** two runners claim the same due sequence; exactly one occurrence row is created and application handling happens once.
-2. **Crash before queue publication:** the sequence and pending occurrence commit, the process stops, and a later publisher recovers the same occurrence.
-3. **Duplicate publication:** the same occurrence job is queued twice; only one job claims and handles it.
-4. **Stale after cancellation:** an occurrence is published, the sequence is cancelled, and the worker skips it.
-5. **Stale after reschedule:** an occurrence is published, the definition version changes, and the old worker skips it.
-6. **Stable retry identity:** queue retries retain the same occurrence key.
-7. **Finite downtime:** several offsets are missed and the configured catch-up policy determines exactly which occurrences run.
-8. **Recurring downtime:** missed recurring intervals do not create an uncontrolled burst and the next date remains anchored to scheduled time.
-9. **Permanent memory:** retained completed/cancelled sequences and application memory remain queryable.
-10. **Final occurrence:** a sequence marked completed after its final durable handoff still allows that matching occurrence to execute.
-11. **Default cleanup:** non-retained terminal sequences are deleted only after their occurrence rows no longer need sequence state, according to the documented pruning policy.
+1. **Competing runners:** two independent processes confirm that they see the same due sequence, wait at a barrier immediately before claiming, and are released together; exactly one occurrence row is created and eventually handled.
+2. **Crash before queue acceptance:** the sequence and pending occurrence commit, the process is terminated before publishing, and a later publisher recovers the same occurrence identity to successful processing.
+3. **Crash after queue acceptance:** the queue durably accepts the job, the publisher is terminated before recording `published`, and recovery may publish the same identity again without duplicate package-controlled effects.
+4. **Worker crash after downstream effect:** an idempotent downstream double records the occurrence key, the worker is terminated before local completion, and recovery reuses the key, makes eventual progress, and applies one logical effect.
+5. **Stale after cancellation:** an occurrence is published, the sequence is cancelled, and the worker skips it.
+6. **Stale after reschedule:** an occurrence is published, the definition version changes, and the old worker skips it.
+7. **Missing sequenceable:** a deleted owning model cancels the sequence and makes current work stale.
+8. **Stable retry identity:** queue retries and downstream application work retain the same occurrence key.
+9. **Finite downtime:** several offsets are missed and the configured catch-up policy determines exactly which occurrences run.
+10. **Recurring downtime and DST:** missed intervals remain anchored to scheduled time and daily local-clock recurrence survives both DST transitions.
+11. **Permanent memory:** retained completed/cancelled sequences and application memory remain queryable.
+12. **Final occurrence:** a sequence marked completed after its final durable handoff still allows that matching occurrence to execute.
+13. **Default cleanup:** non-retained terminal sequences are deleted only after their occurrence rows no longer need sequence state, according to the documented pruning policy.
 
-Use two independent database connections or processes for the competing-runner test so the test exercises actual locking behavior rather than sequential mocks.
+Run the real-process suite against MySQL and PostgreSQL. An `at most once` assertion must be paired with eventual progress so zero executions cannot produce a false success.
 
 ## Compatibility and migrations
 

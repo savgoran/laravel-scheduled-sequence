@@ -11,8 +11,11 @@ use AiSoft\ScheduledSequence\Services\OccurrenceGuard;
 use AiSoft\ScheduledSequence\Services\OccurrencePublisher;
 use AiSoft\ScheduledSequence\Services\ScheduledSequenceRunner;
 use AiSoft\ScheduledSequence\Tests\Fixtures\FailingSequence;
+use AiSoft\ScheduledSequence\Tests\Fixtures\DailySequence;
+use AiSoft\ScheduledSequence\Tests\Fixtures\DispatchingSequence;
 use AiSoft\ScheduledSequence\Tests\Fixtures\GuardedSequence;
 use AiSoft\ScheduledSequence\Tests\Fixtures\OneShotSequence;
+use AiSoft\ScheduledSequence\Tests\Fixtures\OccurrenceAwareApplicationJob;
 use AiSoft\ScheduledSequence\Tests\Fixtures\RecordingOneShotSequence;
 use AiSoft\ScheduledSequence\Tests\Fixtures\RecordingSequence;
 use AiSoft\ScheduledSequence\Tests\Fixtures\RecurringSequence;
@@ -34,6 +37,7 @@ class ScheduledSequenceTest extends TestCase
         Carbon::setTestNow();
         RecordingSequence::$handled = [];
         FailingSequence::$attemptedKeys = [];
+        OccurrenceAwareApplicationJob::$effects = [];
         parent::tearDown();
     }
 
@@ -301,6 +305,72 @@ class ScheduledSequenceTest extends TestCase
         );
     }
 
+    public function test_a_missing_sequenceable_cancels_the_sequence_and_stales_the_occurrence(): void
+    {
+        Carbon::setTestNow('2026-01-01 10:00:00');
+        $origin = TestOrigin::query()->create();
+        $sequence = RecordingOneShotSequence::start($origin);
+        $id = app(ScheduledSequenceRunner::class)
+            ->materializeSequence($sequence->getSequenceRecord()->getKey())[0];
+
+        $origin->delete();
+
+        $this->assertFalse(app(OccurrenceExecutor::class)->execute($id));
+        $this->assertSame(
+            ScheduledSequenceModel::STATUS_CANCELLED,
+            $sequence->getSequenceRecord()->fresh()->status,
+        );
+        $this->assertSame(
+            ScheduledSequenceOccurrence::STATUS_STALE,
+            ScheduledSequenceOccurrence::query()->findOrFail($id)->status,
+        );
+        $this->assertSame([], RecordingSequence::$handled);
+    }
+
+    public function test_an_application_job_receives_and_guards_the_same_occurrence_key(): void
+    {
+        Queue::fake();
+        Carbon::setTestNow('2026-01-01 10:00:00');
+        $origin = TestOrigin::query()->create();
+        $sequence = DispatchingSequence::start($origin);
+        $id = app(ScheduledSequenceRunner::class)
+            ->materializeSequence($sequence->getSequenceRecord()->getKey())[0];
+        $occurrence = ScheduledSequenceOccurrence::query()->findOrFail($id);
+
+        $this->assertTrue(app(OccurrenceExecutor::class)->execute($id));
+
+        Queue::assertPushed(
+            OccurrenceAwareApplicationJob::class,
+            fn (OccurrenceAwareApplicationJob $job): bool => $job->occurrenceKey === $occurrence->occurrence_key,
+        );
+
+        $job = new OccurrenceAwareApplicationJob($occurrence->occurrence_key);
+        $sequence->getSequenceRecord()->fresh()->markCancelled();
+        $job->handle(app(OccurrenceGuard::class));
+
+        $this->assertSame([], OccurrenceAwareApplicationJob::$effects);
+    }
+
+    public function test_daily_recurrence_keeps_local_time_across_the_spring_dst_transition(): void
+    {
+        $this->assertDailyRecurrenceAcrossDst(
+            '2026-03-07 09:00:00',
+            '2026-03-08 09:00:00',
+            '2026-03-09 09:00:00',
+            '-04:00',
+        );
+    }
+
+    public function test_daily_recurrence_keeps_local_time_across_the_autumn_dst_transition(): void
+    {
+        $this->assertDailyRecurrenceAcrossDst(
+            '2026-10-31 09:00:00',
+            '2026-11-01 09:00:00',
+            '2026-11-02 09:00:00',
+            '-05:00',
+        );
+    }
+
     public function test_retries_keep_the_same_occurrence_identity(): void
     {
         Carbon::setTestNow('2026-01-01 10:00:00');
@@ -428,5 +498,39 @@ class ScheduledSequenceTest extends TestCase
             $table->id();
             $table->timestamps();
         });
+    }
+
+    private function assertDailyRecurrenceAcrossDst(
+        string $startAt,
+        string $firstDueAt,
+        string $nextDueAt,
+        string $expectedOffset,
+    ): void {
+        $originalTimezone = date_default_timezone_get();
+        $timezone = 'America/New_York';
+        date_default_timezone_set($timezone);
+        config()->set('app.timezone', $timezone);
+        config()->set('scheduled-sequence.timezone', $timezone);
+
+        try {
+            Carbon::setTestNow(Carbon::parse($startAt, $timezone));
+            $origin = TestOrigin::query()->create();
+            $sequence = DailySequence::start($origin);
+
+            Carbon::setTestNow(Carbon::parse($firstDueAt, $timezone));
+            $ids = app(ScheduledSequenceRunner::class)->materializeSequence(
+                $sequence->getSequenceRecord()->getKey(),
+            );
+            $occurrence = ScheduledSequenceOccurrence::query()->findOrFail($ids[0]);
+            $nextAt = $sequence->getSequenceRecord()->fresh()->next_at;
+
+            $this->assertSame($firstDueAt, $occurrence->scheduled_at->format('Y-m-d H:i:s'));
+            $this->assertSame($nextDueAt, $nextAt->format('Y-m-d H:i:s'));
+            $this->assertSame($expectedOffset, $nextAt->format('P'));
+        } finally {
+            date_default_timezone_set($originalTimezone);
+            config()->set('app.timezone', 'UTC');
+            config()->set('scheduled-sequence.timezone', 'UTC');
+        }
     }
 }

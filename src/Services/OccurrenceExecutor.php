@@ -46,6 +46,12 @@ class OccurrenceExecutor
                 return false;
             }
 
+            if (! $sequence->sequenceable()->exists()) {
+                $this->invalidateMissingSequenceable($record, $sequence);
+
+                return false;
+            }
+
             $handler = ScheduledSequence::createFromSequence($sequence);
             $occurrence = new Occurrence($record, $sequence);
 
@@ -102,6 +108,30 @@ class OccurrenceExecutor
         );
 
         return $id === null ? null : $model::query()->with('sequence')->find($id);
+    }
+
+    /**
+     * Cancel a sequence whose owning model no longer exists and stale its occurrence.
+     */
+    private function invalidateMissingSequenceable(
+        ScheduledSequenceOccurrence $occurrence,
+        ScheduledSequenceModel $sequence,
+    ): void {
+        DB::connection($occurrence->getConnectionName())->transaction(
+            function () use ($occurrence, $sequence): void {
+                $sequence->newQuery()
+                    ->whereKey($sequence->getKey())
+                    ->where('definition_version', $occurrence->definition_version)
+                    ->update([
+                        'status' => ScheduledSequenceModel::STATUS_CANCELLED,
+                        'end_at' => now(),
+                        'next_at' => null,
+                        'updated_at' => now(),
+                    ]);
+
+                $this->finish($occurrence, ScheduledSequenceOccurrence::STATUS_STALE);
+            },
+        );
     }
 
     /**
