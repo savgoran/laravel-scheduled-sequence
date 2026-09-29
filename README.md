@@ -52,7 +52,7 @@ For local path development:
 ## Create a sequence
 
 ```bash
-php artisan make:scheduled-sequence AccountLeftUnpaidSequence
+php artisan make:scheduled-sequence OutstandingInvoiceReminderSequence
 ```
 
 ```php
@@ -62,9 +62,9 @@ namespace App\ScheduledSequence;
 
 use AiSoft\ScheduledSequence\Occurrence;
 use AiSoft\ScheduledSequence\ScheduledSequence;
-use App\Jobs\SendAccountReminder;
+use App\Jobs\SendInvoiceReminder;
 
-final class AccountLeftUnpaidSequence extends ScheduledSequence
+final class OutstandingInvoiceReminderSequence extends ScheduledSequence
 {
     protected array $offsets = [
         'now',
@@ -77,13 +77,13 @@ final class AccountLeftUnpaidSequence extends ScheduledSequence
 
     protected function shouldContinue(Occurrence $occurrence): bool
     {
-        return $occurrence->sequence->sequenceable?->isUnpaid() === true;
+        return $occurrence->sequence->sequenceable?->isOutstanding() === true;
     }
 
     protected function handle(Occurrence $occurrence): void
     {
-        SendAccountReminder::dispatch(
-            accountId: $occurrence->sequence->sequenceable_id,
+        SendInvoiceReminder::dispatch(
+            invoiceId: $occurrence->sequence->sequenceable_id,
             occurrenceKey: $occurrence->key,
         );
     }
@@ -93,7 +93,7 @@ final class AccountLeftUnpaidSequence extends ScheduledSequence
 Start or restart it for a model:
 
 ```php
-AccountLeftUnpaidSequence::start($account, $account->user_id);
+OutstandingInvoiceReminderSequence::start($invoice, $invoice->customer_id);
 ```
 
 Restarting the same handler/model pair increments `definition_version`. Queued occurrences from the older definition become stale and do not execute.
