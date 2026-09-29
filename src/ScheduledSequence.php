@@ -25,14 +25,14 @@ abstract class ScheduledSequence
     /** Repeat the complete offset sequence after its final occurrence. */
     protected bool $repeatSequence = false;
 
-    /** Recurring interval applied after the finite offset sequence. */
-    protected ?string $repeatEvery = null;
+    /** Recurring interval applied after the final offset. */
+    protected ?string $repeatEveryAfterLastOffset = null;
 
     /** @deprecated Use $repeatSequence. */
     protected bool $recurrence = false;
 
-    /** @deprecated Use $repeatEvery. */
-    protected ?string $repeatEveryAfterLastOffset = null;
+    /** @deprecated Use $repeatEveryAfterLastOffset. */
+    protected ?string $repeatEvery = null;
 
     /** Default business-state switch used by shouldContinue(). */
     protected bool $enabled = true;
@@ -463,7 +463,7 @@ abstract class ScheduledSequence
      */
     private function repeatInterval(): ?string
     {
-        return $this->repeatEvery ?? $this->repeatEveryAfterLastOffset;
+        return $this->repeatEveryAfterLastOffset ?? $this->repeatEvery;
     }
 
     /**

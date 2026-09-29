@@ -60,7 +60,7 @@ final class AccountLeftUnpaidSequence extends ScheduledSequence
         '20 days 10am',
     ];
 
-    protected ?string $repeatEvery = '5 days';
+    protected ?string $repeatEveryAfterLastOffset = '5 days';
 
     protected bool $rememberPermanently = true;
 
@@ -250,7 +250,7 @@ The default is `COALESCE_LATEST`.
 For regular recurrence after a finite prefix:
 
 ```php
-protected ?string $repeatEvery = '5 days';
+protected ?string $repeatEveryAfterLastOffset = '5 days';
 ```
 
 For repeating the entire offset sequence:

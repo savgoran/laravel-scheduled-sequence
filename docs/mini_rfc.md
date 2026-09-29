@@ -55,7 +55,7 @@ final class AccountLeftUnpaidSequence extends ScheduledSequence
         '20 days 10am',
     ];
 
-    protected ?string $repeatEvery = '5 days';
+    protected ?string $repeatEveryAfterLastOffset = '5 days';
 
     protected function shouldContinue(Occurrence $occurrence): bool
     {

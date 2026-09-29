@@ -14,6 +14,7 @@ use AiSoft\ScheduledSequence\Tests\Fixtures\FailingSequence;
 use AiSoft\ScheduledSequence\Tests\Fixtures\DailySequence;
 use AiSoft\ScheduledSequence\Tests\Fixtures\DispatchingSequence;
 use AiSoft\ScheduledSequence\Tests\Fixtures\GuardedSequence;
+use AiSoft\ScheduledSequence\Tests\Fixtures\LegacyRepeatingSequence;
 use AiSoft\ScheduledSequence\Tests\Fixtures\OneShotSequence;
 use AiSoft\ScheduledSequence\Tests\Fixtures\OccurrenceAwareApplicationJob;
 use AiSoft\ScheduledSequence\Tests\Fixtures\RecordingOneShotSequence;
@@ -21,6 +22,7 @@ use AiSoft\ScheduledSequence\Tests\Fixtures\RecordingSequence;
 use AiSoft\ScheduledSequence\Tests\Fixtures\RecurringSequence;
 use AiSoft\ScheduledSequence\Tests\Fixtures\RememberedSequence;
 use AiSoft\ScheduledSequence\Tests\Fixtures\RepeatingSequence;
+use AiSoft\ScheduledSequence\Tests\Fixtures\RepeatingSequenceWithLegacyAlias;
 use AiSoft\ScheduledSequence\Tests\Fixtures\ReplaySequence;
 use AiSoft\ScheduledSequence\Tests\Fixtures\SkipSequence;
 use AiSoft\ScheduledSequence\Tests\Fixtures\TestOrigin;
@@ -176,6 +178,40 @@ class ScheduledSequenceTest extends TestCase
         $this->assertCount(1, $ids);
         $this->assertSame('repeat', $occurrence->offset);
         $this->assertSame('2026-01-10 10:00:00', $occurrence->scheduled_at->format('Y-m-d H:i:s'));
+        $this->assertSame(
+            '2026-01-13 10:00:00',
+            $sequence->getSequenceRecord()->fresh()->next_at->format('Y-m-d H:i:s'),
+        );
+    }
+
+    public function test_repeat_every_remains_a_compatible_alias(): void
+    {
+        Carbon::setTestNow('2026-01-01 10:00:00');
+        $origin = TestOrigin::query()->create();
+        $sequence = LegacyRepeatingSequence::start($origin);
+
+        Carbon::setTestNow('2026-01-10 10:00:00');
+        app(ScheduledSequenceRunner::class)->materializeSequence(
+            $sequence->getSequenceRecord()->getKey(),
+        );
+
+        $this->assertSame(
+            '2026-01-14 10:00:00',
+            $sequence->getSequenceRecord()->fresh()->next_at->format('Y-m-d H:i:s'),
+        );
+    }
+
+    public function test_repeat_every_after_last_offset_takes_precedence_over_its_legacy_alias(): void
+    {
+        Carbon::setTestNow('2026-01-01 10:00:00');
+        $origin = TestOrigin::query()->create();
+        $sequence = RepeatingSequenceWithLegacyAlias::start($origin);
+
+        Carbon::setTestNow('2026-01-10 10:00:00');
+        app(ScheduledSequenceRunner::class)->materializeSequence(
+            $sequence->getSequenceRecord()->getKey(),
+        );
+
         $this->assertSame(
             '2026-01-13 10:00:00',
             $sequence->getSequenceRecord()->fresh()->next_at->format('Y-m-d H:i:s'),

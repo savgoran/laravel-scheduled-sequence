@@ -52,11 +52,11 @@ MySequence::start($model, $ownerId);
 Use:
 
 ```php
-protected ?string $repeatEvery = '5 days';
+protected ?string $repeatEveryAfterLastOffset = '5 days';
 protected bool $repeatSequence = true;
 ```
 
-`$repeatEveryAfterLastOffset` and `$recurrence` remain compatible aliases.
+`$repeatEvery` and `$recurrence` remain compatible aliases.
 
 ### Run queue workers
 

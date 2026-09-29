@@ -75,7 +75,7 @@ final class AccountLeftUnpaidSequence extends ScheduledSequence
         '7 days 10am',
     ];
 
-    protected ?string $repeatEvery = '5 days';
+    protected ?string $repeatEveryAfterLastOffset = '5 days';
 
     protected function shouldContinue(Occurrence $occurrence): bool
     {
@@ -278,7 +278,7 @@ Recurrence is calculated from the intended `scheduled_at`, not actual worker com
 
 If an occurrence intended for 10:00 executes at 10:07, a five-day recurrence remains anchored to 10:00. Queue latency does not cause permanent schedule drift.
 
-For `$repeatEvery`, missed intervals follow the selected catch-up policy. For `$repeatSequence`, the next cycle anchors to the previous cycle's final scheduled occurrence.
+For `$repeatEveryAfterLastOffset`, missed intervals follow the selected catch-up policy. For `$repeatSequence`, the next cycle anchors to the previous cycle's final scheduled occurrence.
 
 ## Lifecycle
 
@@ -316,7 +316,7 @@ Registration is configurable because applications may prefer to own the event de
 The reference package retains adapters for its earlier API:
 
 - `init()` delegates to `start()`;
-- `$repeatEveryAfterLastOffset` aliases `$repeatEvery`;
+- `$repeatEvery` aliases `$repeatEveryAfterLastOffset`;
 - `$recurrence` aliases `$repeatSequence`;
 - `onExpiredOffset` and `on{normalizedOffset}` run through the default `handle` implementation.
 

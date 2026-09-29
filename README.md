@@ -73,7 +73,7 @@ final class AccountLeftUnpaidSequence extends ScheduledSequence
         '7 days 10am',
     ];
 
-    protected ?string $repeatEvery = '5 days';
+    protected ?string $repeatEveryAfterLastOffset = '5 days';
 
     protected function shouldContinue(Occurrence $occurrence): bool
     {
@@ -187,7 +187,7 @@ Daily local-clock recurrence is tested across forward and backward daylight-savi
 Repeat after the finite prefix:
 
 ```php
-protected ?string $repeatEvery = '5 days';
+protected ?string $repeatEveryAfterLastOffset = '5 days';
 ```
 
 Repeat the complete offset sequence:
