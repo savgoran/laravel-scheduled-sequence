@@ -1,7 +1,7 @@
 # RFC: Scheduled Sequences — persistent irregular application schedules
 
 - **Status:** Implemented in the reference package
-- **Package:** `aisoft/laravel-scheduled-sequence`
+- **Package:** `ai-soft/laravel-scheduled-sequence`
 - **Supported Laravel versions:** 10–13
 
 ## Summary

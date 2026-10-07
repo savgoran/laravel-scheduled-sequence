@@ -181,7 +181,7 @@ Delayed jobs remain suitable for many finite cases. Scheduled Sequences are usef
 
 ## Reference implementation
 
-The `aisoft/laravel-scheduled-sequence` package implements:
+The `ai-soft/laravel-scheduled-sequence` package implements:
 
 - class-based definitions and relative offsets;
 - model ownership through an Eloquent morph;

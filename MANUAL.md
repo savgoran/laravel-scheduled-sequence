@@ -5,7 +5,7 @@ This manual builds an unpaid-account reminder as a durable, model-specific tempo
 ## 1. Install and migrate
 
 ```bash
-composer require aisoft/laravel-scheduled-sequence
+composer require ai-soft/laravel-scheduled-sequence
 php artisan vendor:publish --tag=scheduled-sequence-config
 php artisan vendor:publish --tag=scheduled-sequence-migrations
 php artisan migrate
@@ -19,7 +19,7 @@ For a local path repository:
         {"type": "path", "url": "../package", "options": {"symlink": true}}
     ],
     "require": {
-        "aisoft/laravel-scheduled-sequence": "@dev"
+        "ai-soft/laravel-scheduled-sequence": "@dev"
     }
 }
 ```

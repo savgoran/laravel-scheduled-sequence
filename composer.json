@@ -1,5 +1,5 @@
 {
-    "name": "aisoft/laravel-scheduled-sequence",
+    "name": "ai-soft/laravel-scheduled-sequence",
     "description": "Persistent, state-aware scheduling sequences with irregular timing for Laravel applications.",
     "keywords": [
         "laravel",

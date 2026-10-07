@@ -16,7 +16,7 @@ This package is the reference implementation for
 ## Install
 
 ```bash
-composer require aisoft/laravel-scheduled-sequence:^0.1
+composer require ai-soft/laravel-scheduled-sequence:^0.1
 ```
 
 Then publish and run the package migrations:
@@ -34,7 +34,7 @@ For local path development:
 ```json
 {
     "repositories": [{"type": "path", "url": "../package"}],
-    "require": {"aisoft/laravel-scheduled-sequence": "@dev"}
+    "require": {"ai-soft/laravel-scheduled-sequence": "@dev"}
 }
 ```
 
