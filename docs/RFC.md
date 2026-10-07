@@ -20,7 +20,7 @@ The reference implementation uses an occurrence ledger as a recoverable local ou
 
 ## Motivation
 
-This proposal is based on two years of production use of its predecessor, DynamicScheduler, in Jobatory. That implementation validated the need for persistent, entity-specific schedules and exposed the failure, concurrency, recovery, and observability requirements addressed by this package.
+This proposal is based on two years of production use of its predecessor, DynamicScheduler. That implementation validated the need for persistent, entity-specific schedules and exposed the failure, concurrency, recovery, and observability requirements addressed by this package.
 
 Some schedules belong to individual application entities and cannot be expressed as one shared cron expression.
 
