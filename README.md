@@ -1,8 +1,8 @@
 # Laravel Scheduled Sequence
 
-> **Experimental reference implementation**
+> **Early release**
 >
-> The public API may change while the scheduling and failure semantics are refined.
+> The public API may change before version 1.0.
 
 Database-backed, model-aware scheduled sequences for Laravel 10–13 and PHP 8.1 or newer.
 
