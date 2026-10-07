@@ -8,26 +8,15 @@ Database-backed, model-aware scheduled sequences for Laravel 10–13 and PHP 8.1
 
 A sequence stores authoritative scheduling state outside the queue. Every due position becomes a durable occurrence with a stable identity before Laravel Queue executes it.
 
+The design evolved from DynamicScheduler, a Jobatory production implementation used for two years. Scheduled Sequence extracts that proven model into a reusable package and adds durable occurrence identity, concurrency control, recoverable queue publication, catch-up policies, and stale-work protection.
+
 This package is the reference implementation for
 [Laravel Framework Discussion #61689](https://github.com/laravel/framework/discussions/61689).
 
 ## Install
 
-The package is not yet published on Packagist. Install the experimental branch
-directly from GitHub:
-
-```json
-{
-    "repositories": [
-        {
-            "type": "vcs",
-            "url": "https://github.com/savgoran/laravel-scheduled-sequence"
-        }
-    ],
-    "require": {
-        "aisoft/laravel-scheduled-sequence": "dev-main"
-    }
-}
+```bash
+composer require aisoft/laravel-scheduled-sequence:^0.1
 ```
 
 Then publish and run the package migrations:

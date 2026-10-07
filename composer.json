@@ -1,6 +1,14 @@
 {
     "name": "aisoft/laravel-scheduled-sequence",
     "description": "Persistent, state-aware scheduling sequences with irregular timing for Laravel applications.",
+    "keywords": [
+        "laravel",
+        "scheduler",
+        "queue",
+        "recurrence",
+        "workflow"
+    ],
+    "homepage": "https://github.com/savgoran/laravel-scheduled-sequence",
     "type": "library",
     "license": "MIT",
     "authors": [
@@ -40,6 +48,10 @@
                 "AiSoft\\ScheduledSequence\\ScheduledSequenceServiceProvider"
             ]
         }
+    },
+    "support": {
+        "issues": "https://github.com/savgoran/laravel-scheduled-sequence/issues",
+        "source": "https://github.com/savgoran/laravel-scheduled-sequence"
     },
     "scripts": {
         "check-autoload": "composer dump-autoload --optimize --strict-psr",
